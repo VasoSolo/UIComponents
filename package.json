@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@storybook/react": "^6.5.10",
+    "storybook": "^6.5.10"
+  }
+}
