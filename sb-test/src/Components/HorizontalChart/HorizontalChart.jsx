@@ -2,28 +2,20 @@ import React, { useEffect, createRef } from "react";
 import * as d3 from "d3";
 import { schemeSet3, selectAll, transition } from "d3";
 
-// The following Styles component is a <div> element, which has been styled using Emotion
-// For docs, visit https://emotion.sh/docs/styled
-
-// Theming variables are provided for your use via a ThemeProvider
-// imported from @superset-ui/core. For variables available, please visit
-// https://github.com/apache-superset/superset-ui/blob/master/packages/superset-ui-core/src/style/index.ts
-
-/**
- * ******************* WHAT YOU CAN BUILD HERE *******************
- *  In essence, a chart is given a few key ingredients to work with:
- *  * Data: provided via `props.data`
- *  * A DOM element
- *  * FormData (your controls!) provided as props by transformProps.ts
- */
-
 export default function BarD3(props) {
   console.log("props", props);
-  const { data, height, width, cols, metrics, mainColor, hoverColor } = props;
-  console.log("height", height);
+  const {
+    data,
+    height,
+    width,
+    cols,
+    metrics,
+    mainColor,
+    hoverColor,
+    labelPosition,
+  } = props;
   const rootElem = createRef();
   function createChart(element) {
-    //let element;
     const metrica = metrics[0];
     const colName = cols[0];
 
@@ -43,9 +35,17 @@ export default function BarD3(props) {
     console.log("dataArray", dataArray);
     console.log("Y", Y);
 
+    let arrayOfYItemLenght = [];
+    Y.forEach((el) => {
+      arrayOfYItemLenght.push(el.length);
+    });
+    const maximumLenghtInY = d3.max(arrayOfYItemLenght); // находим самую длинную подпись слева
+    const lenghtLeftTextScale = d3.scaleLinear([1, 20], [45, 100]);
+
     const maximumInDateArray = d3.max(dataArray);
-    //const padding = 5;
-    const paddingLeft = 40;
+    //const paddingLeft = 40;
+    const paddingLeft = lenghtLeftTextScale(maximumLenghtInY);
+    console.log("paddingLeft", paddingLeft);
     const paddingRight = 40;
     const paddingBottom = 40;
     const heightChart = height - paddingBottom;
@@ -59,6 +59,16 @@ export default function BarD3(props) {
     );
     const heightScale = d3.scaleLinear([0, dataArray.length], [0, heightChart]);
     //const color = d3.scaleLinear([0, maximumInDateArray], ["blue", "red"]);
+
+    function culcLabelPositin(d) {
+      if (labelPosition == "end") {
+        return widthScale(d) + 2;
+      } else if (labelPosition == "middle") {
+        return widthScale(d) / 2;
+      } else if (labelPosition == "start") {
+        return 2;
+      }
+    }
 
     function calcY(d, i) {
       return Math.floor(heightChart / dataArray.length) * i;
@@ -81,37 +91,37 @@ export default function BarD3(props) {
       .append("g")
       .attr("class", "rectGroup")
       .attr("height", heightChart)
-      .attr("width", widthChart);
-    //.attr("transform", "translate(" + paddingLeft + ", 0)");
+      .attr("width", widthChart)
+      .attr("transform", "translate(" + paddingLeft + ", 0)");
 
     const xAxisGroup = canvas
       .append("g")
       .attr("class", "Xaxis")
-      .attr("transform", "translate(0, " + heightChart + ")");
-    //.attr(
-    //  "transform",
-    //  "translate(" + paddingLeft + "," + heightChart /* - 5 */ + ")"
-    //)
+      .attr("transform", "translate(" + paddingLeft + ", " + heightChart + ")");
 
     xAxisGroup.call(xAxis);
 
     const yAxisGroup = canvas // группа элементов оси У
       .append("g")
-      .attr("class", "Yaxis");
-    //.attr("transform", "translate(" + paddingLeft + ", 0 )"); //-5
+      .attr("class", "Yaxis")
+      .attr("margin-left", "auto")
+      .attr("margin-right", 0);
 
-    //yAxisGroup.call(yAxis);
+    const widthYAxis = document.querySelector(".Yaxis").getAttribute("width");
+    console.log("widthYAxis", widthYAxis);
 
     yAxisGroup //подписи по оси У
       .selectAll("text")
       .data(Y)
       .enter()
       .append("text")
-      .attr("x", "-" + paddingLeft)
       .attr("y", (d, i) => {
-        return heightScale(i) + (heightRect + 2 * padding) / 2;
+        return heightScale(i);
       })
-      .text((d, i) => d);
+      .text((d, i) => d)
+      .attr("x", paddingLeft - 5)
+      .attr("text-anchor", "end")
+      .attr("dy", (heightRect * 3) / 4);
 
     rectGroup
       .append("line")
@@ -142,10 +152,11 @@ export default function BarD3(props) {
       .text((d) => d)
       .attr("fill", "gray")
       .attr("font-weight", "bold")
-      .attr("x", (d) => widthScale(d) + 2)
+      .attr("x", (d) => culcLabelPositin(d)) //labelPosition
       .attr("y", (d, i) => {
-        return heightScale(i) + (heightRect + 2 * padding) / 2;
-      });
+        return heightScale(i);
+      })
+      .attr("dy", (heightRect * 3) / 4);
 
     // animation
     rect

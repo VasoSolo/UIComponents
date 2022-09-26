@@ -3,12 +3,35 @@ import BarD3 from "./HorizontalChart";
 export default {
   title: "HorizontalChart",
   component: BarD3,
+  argTypes: {
+    labelPosition: {
+      type: "string",
+      description: "Положение подписей",
+      defaultValue: "end",
+      options: ["end", "middle", "start"],
+      control: {
+        type: "radio",
+      },
+    },
+    height: {
+      type: Number,
+      description: "Высота чарта",
+      control: { type: "range", min: 200, max: 1500, step: 50 },
+    },
+  },
 };
 
 const Template = (arg) => <BarD3 {...arg}></BarD3>;
 
 export const HorizontalChart = Template.bind({});
 HorizontalChart.args = {
+  height: 700,
+  width: 1000,
+  cols: ["platform"],
+  metrics: ["count"],
+  mainColor: "blue",
+  hoverColor: "red",
+  labelPosition: "end",
   data: [
     { platform: "TG16", count: 2 },
     { platform: "PSP", count: 1213 },
@@ -42,10 +65,4 @@ HorizontalChart.args = {
     { platform: "SAT", count: 173 },
     { platform: "GC", count: 556 },
   ],
-  height: 700,
-  width: 1000,
-  cols: ["platform"],
-  metrics: ["count"],
-  mainColor: "blue",
-  hoverColor: "red",
 };
