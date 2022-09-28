@@ -15,6 +15,7 @@ export default function BarD3(props) {
     labelColor = "#254558",
     limitColor = "red",
     labelPosition = "end",
+    labelForStackedPosition = "end",
     labelFontSize = 8,
     xAxisFontSize = 14,
     yAxisFontSize = 14,
@@ -26,7 +27,8 @@ export default function BarD3(props) {
     paddingInfoLabel = 10,
     legendX = width - 40,
     legendY = 5,
-    visualMode,
+    orientation,
+    visualGroupMode,
     //paddingForChart = "0 0 0 0",
   } = props;
   const rootElem = createRef();
@@ -54,7 +56,6 @@ export default function BarD3(props) {
         return [el[0], Array.from(d3.group(el[1], (d) => d[cols[1]]))];
       });
     }
-    //console.log("dataGrouped_1", dataGrouped);
     if (cols.length == 3) {
       dataGrouped = dataGrouped.map((el) => {
         return [
@@ -76,41 +77,59 @@ export default function BarD3(props) {
       arrayOfDifferentType.push(element[cols[cols.length - 1]]);
     });
     arrayOfDifferentType = Array.from(new Set(arrayOfDifferentType));
-    let arrayLenghtGroups = [];
-    if (cols.length > 1) {
-      dataGrouped.forEach((element) => {
-        //console.log("element in datagrouped.foreach", element);
 
-        arrayLenghtGroups.push(element[1].length);
-        if (cols.length === 3) {
-          let arrayLenghtGroupsLevel2 = [];
-          element[1].forEach((elementLevel2, index) => {
-            arrayLenghtGroupsLevel2.push(elementLevel2[1].length);
-          });
-          arrayLenghtGroups.push([element[1].length, arrayLenghtGroupsLevel2]);
-        } else {
-          arrayLenghtGroups.push(element[1].length);
-        }
+    let arrayOfSumOfValueInGroupLevelOne = [];
+    if (cols.length == 2) {
+      dataGrouped.forEach((el_1) => {
+        const res = el_1[1].reduce((acc, el_2) => {
+          return el_2[1][0][metrica] + acc;
+        }, 0);
+        arrayOfSumOfValueInGroupLevelOne.push(res);
       });
     }
+    let CountGroupLevelTwo = 0; // количество групп второго уровня (для рассчёта ширины групп первого уровня в режиме stacked)
+    let arrayOfSumOfValueInGroupLevelTwo = []; // массив из сумм в группах второго порядка (для рассчёта масштабирования в режиме stacked)
+    if (cols.length == 3) {
+      dataGrouped.forEach((el_1) => {
+        CountGroupLevelTwo += el_1[1].length;
+        let res2 = 0;
+        el_1[1].forEach((el_2) => {
+          res2 += el_2[1].reduce((acc, el_3) => {
+            return el_3[1][0][metrica] + acc;
+          }, 0);
+        });
+        arrayOfSumOfValueInGroupLevelTwo.push(res2);
+      });
+    }
+    console.log("CountGroupLevelTwo", CountGroupLevelTwo);
+    console.log(
+      "arrayOfSumOfValueInGroupLevelTwo",
+      arrayOfSumOfValueInGroupLevelTwo
+    );
 
     console.log("data", data);
     //console.log("arrayLenghtGroups", arrayLenghtGroups);
     console.log("dataGrouped", dataGrouped);
-    console.log("arrayOfAllValue", arrayOfAllValue);
-    console.log("arrayOfDifferentType", arrayOfDifferentType);
+    //console.log("arrayOfAllValue", arrayOfAllValue);
+    //console.log("arrayOfDifferentType", arrayOfDifferentType);
+    console.log(
+      "arrayOfSumOfValueInGroupLevelOne",
+      arrayOfSumOfValueInGroupLevelOne
+    );
 
     ////////////////////////////////////////////////////////////////////////
-
     //вычисляем максимальное значение в метрике
-
     const maximumInDateArray = d3.max(arrayOfAllValue); // максимальное значение в данных
+    const maximumInSumOfValueInGroup =
+      cols.length === 2
+        ? d3.max(arrayOfSumOfValueInGroupLevelOne)
+        : d3.max(arrayOfSumOfValueInGroupLevelTwo); // максимальное значение среди сумм по группам первого уровня
     const paddingBetweenGroups = 10; // отступ между группами
-    const heightChart = height - paddingBottom; // высота области чарта, который мы рисуем
+    const heightChart = height - paddingBottom - paddingTop; // высота области чарта, который мы рисуем
     const widthChart = width - paddingLeft - paddingRight; // ширина области чарта
     const padding = 0; // отступ между прямоугольниками
 
-    let heightRect;
+    let heightRect; // высота прямоугольника в горизонтальном режиме
     if (cols.length === 2) {
       heightRect =
         (heightChart -
@@ -130,8 +149,11 @@ export default function BarD3(props) {
     } else {
       heightRect = heightChart / arrayOfAllValue.length - padding;
     }
+    const heightStackedGroup = heightChart / dataGrouped.length;
+    const heightStackedGroupLevelTwo = heightChart / CountGroupLevelTwo;
+    //console.log("heightStackedGroupLevelTwo", heightStackedGroupLevelTwo);
 
-    let widthRect;
+    let widthRect; // ширина прямоугольника в вертикальном режиме режиме
     if (cols.length === 2) {
       widthRect =
         (widthChart -
@@ -151,6 +173,8 @@ export default function BarD3(props) {
     } else {
       widthRect = widthChart / arrayOfAllValue.length - padding;
     }
+    const widthStackedGroup = widthChart / dataGrouped.length;
+    const widthStackedGroupLevelTwo = widthChart / CountGroupLevelTwo;
 
     //heightRect = heightChart / arrayOfAllValue.length; // - padding; // высота прямоугольников
     //heightRect = heightRect; // - padding; // высота прямоугольников
@@ -189,104 +213,149 @@ export default function BarD3(props) {
       .domain(arrayOfDifferentType)
       .range(colorSets[0]);
     //const colorScale = d3.scale
-    console.log("WidhtScale");
     const widthScale = d3.scaleLinear(
       [0, maximumInDateArray],
-      //[0, widthChart - paddingRight - paddingForLegend]
+      [0, widthChart - paddingRight]
+    );
+    const widthStackedScale = d3.scaleLinear(
+      [0, maximumInSumOfValueInGroup],
       [0, widthChart - paddingRight]
     );
     const heightScale = d3.scaleLinear(
       [0, maximumInDateArray],
-      //[0, widthChart - paddingRight - paddingForLegend]
+      [heightChart, 0]
+    );
+    //console.log("maximumInSumOfValueInGroup", maximumInSumOfValueInGroup);
+    const heightStackedScale = d3.scaleLinear(
+      [0, maximumInSumOfValueInGroup],
+      //[heightChart, 0]
+      [0, heightChart]
+    );
+    const heightStackedScaleForAxis = d3.scaleLinear(
+      [0, maximumInSumOfValueInGroup],
+      //[heightChart, 0]
       [heightChart, 0]
     );
 
-    function culcLabelPosition(d) {
+    function culcLabelPosition(d, mode = "group") {
       // позиция подписей
-      if (labelPosition === "end") {
-        return widthScale(d) + 2;
-      } else if (labelPosition === "middle") {
-        return widthScale(d) / 2;
+      if (mode === "stacked") {
+        if (labelPosition === "end") {
+          return widthStackedScale(d);
+        } else if (labelPosition === "middle") {
+          return widthStackedScale(d) / 2;
+        } else {
+          return 0;
+        }
       } else {
-        return 2;
+        if (labelPosition === "end") {
+          return widthScale(d) + 2;
+        } else if (labelPosition === "middle") {
+          return widthScale(d) / 2;
+        } else {
+          return 2;
+        }
       }
     }
-    function culcLabelPositionForVertical(d) {
-      // позиция подписей
-      if (labelPosition === "end") {
-        return heightScale(d) - 2;
-      } else if (labelPosition === "middle") {
-        return heightScale(d) / 2;
+    function culcLabelPositionForVertical(d, mode = "group") {
+      // позиция подписей для вертикального отобоажения
+      if (mode === "stacked") {
+        if (labelPosition === "end") {
+          return heightStackedScale(d);
+        } else if (labelPosition === "middle") {
+          return heightStackedScale(d) / 2;
+        } else {
+          return 0;
+        }
       } else {
-        return -2;
+        if (labelPosition === "end") {
+          return heightScale(d) - 2;
+        } else if (labelPosition === "middle") {
+          return heightChart - (heightChart - heightScale(d)) / 2;
+        } else {
+          return heightChart - 3;
+        }
       }
     }
 
     if (element.select(".MyChart")) {
       element.select(".MyChart").remove();
     }
+    ///////////////////////////////////////рисуем
+    const canvas = element
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("class", "MyChart")
+      .attr("style", "padding-top: " + paddingTop + "px");
+    ////////////////////////////////////////////////////////////////////легенда
+    const legendXChange = legendX === 0 ? widthChart - paddingRight : legendX;
+
+    const legendTable = canvas
+      .append("g")
+      .attr("class", "legendTable")
+      .attr("transform", "translate(" + legendXChange + "," + legendY + ")");
+
+    const legend = legendTable
+      .selectAll(".legend")
+      .data(arrayOfDifferentType)
+      .enter()
+      .append("g")
+      .attr("class", "legend")
+      .attr("transform", function (d, i) {
+        return "translate(0," + i * 15 + ")";
+      });
+
+    legend
+      .append("rect")
+      .attr("x", 1)
+      .attr("y", 1)
+      .attr("height", 10)
+      .attr("width", 10)
+      .attr("fill", (d) => colorScale(d))
+      .attr("class", "legend__rect-item");
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 10)
+      .attr("height", 10)
+      .attr("width", 10)
+      .text((d) => d)
+      .attr("class", "legend__text-item");
+
+    ///********************************************************************************** */
     /////////////////////горизонтальный режим////////////////////////////////////////////////////////////////////////
-    if (visualMode === "horizontal") {
-      const xAxis = d3.axisBottom(widthScale).ticks(10); // ось Х
-      const xAxisTicks = d3 //ось Х для сетки
-        .axisBottom(widthScale)
-        .tickSize(-heightChart)
-        .ticks(10)
-        .tickArguments([]);
-      ///////////////////////////////////////рисуем
-      const canvas = element
-        .append("svg")
-        .attr("width", width)
-        .attr("height", height)
-        .attr("class", "MyChart")
-        .attr("style", "padding-top: " + paddingTop + "px");
-      ////////////////////////////////////////////////////////////////////легенда
-      const legendXChange = legendX === 0 ? widthChart - paddingRight : legendX;
-
-      const legendTable = canvas
-        .append("g")
-        .attr("class", "legendTable")
-        .attr("transform", "translate(" + legendXChange + "," + legendY + ")");
-
-      const legend = legendTable
-        .selectAll(".legend")
-        .data(arrayOfDifferentType)
-        .enter()
-        .append("g")
-        .attr("class", "legend")
-        .attr("transform", function (d, i) {
-          return "translate(0," + i * 15 + ")";
-        });
-
-      legend
-        .append("rect")
-        .attr("x", 1)
-        .attr("y", 1)
-        .attr("height", 10)
-        .attr("width", 10)
-        .attr("fill", (d) => colorScale(d))
-        .attr("class", "legend__rect-item");
-
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 10)
-        .attr("height", 10)
-        .attr("width", 10)
-        .text((d) => d)
-        .attr("class", "legend__text-item");
-
+    if (orientation === "horizontal") {
+      let xAxis;
+      let xAxisTicks;
+      if (visualGroupMode === "stacked") {
+        /////////////////////////////////staked
+        xAxis = d3.axisBottom(widthStackedScale).ticks(10); // ось Х
+        xAxisTicks = d3 //ось Х для сетки
+          .axisBottom(widthStackedScale)
+          .tickSize(-heightChart)
+          .ticks(10)
+          .tickArguments([]);
+      } else {
+        xAxis = d3.axisBottom(widthScale).ticks(10); // ось Х
+        xAxisTicks = d3 //ось Х для сетки
+          .axisBottom(widthScale)
+          .tickSize(-heightChart)
+          .ticks(10)
+          .tickArguments([]);
+      }
       ///////////////////////////////////////////////////////////////////////////////////////////////////
       const xAxisTicksGroup = canvas // группа для сетки
         .append("g")
-        .attr("class", "Xaxis")
+        .attr("class", "XaxisTicks")
         .attr(
           "transform",
           "translate(" + paddingLeft + ", " + heightChart + ")"
         );
       xAxisTicksGroup.call(xAxisTicks).style("opacity", "0.1");
 
-      const xAxisGroup = canvas //группа  для оси х
+      const xAxisGroup = canvas //группа для оси х
         .append("g")
         .attr("class", "Xaxis")
         .attr(
@@ -299,8 +368,6 @@ export default function BarD3(props) {
       const rects = canvas
         .append("g")
         .attr("class", "rectCanvas")
-        .attr("height", heightChart)
-        .attr("width", widthChart)
         .attr("transform", "translate(" + paddingLeft + ", 0)");
 
       rects // ось У
@@ -323,40 +390,63 @@ export default function BarD3(props) {
           .attr("class", "groupOfRect");
 
         groupOfRect.attr("transform", (d, i) => {
-          //console.log("positionPrevBlock in groupOfRect", d[1]);
-          let sum = 0;
-          if (cols.length === 3) {
-            d[1].forEach((el) => {
-              sum += el[1].length;
-            });
-          }
-          let height =
-            sum > 0
-              ? sum * (heightRect + padding) +
-                paddingBetweenGroups +
-                paddingBetweenGroups * d[1].length
-              : d[1].length * (heightRect + padding) + paddingBetweenGroups;
+          let res;
+          if (visualGroupMode === "stacked") {
+            /////////////////////////////////staked
+            if (cols.length === 3) {
+              res = positionPrevBlock;
+              positionPrevBlock =
+                positionPrevBlock + heightStackedGroupLevelTwo * d[1].length;
+            } else {
+              res = heightStackedGroup * i;
+            }
+          } else {
+            let sum = 0;
+            if (cols.length === 3) {
+              d[1].forEach((el) => {
+                sum += el[1].length;
+              });
+            }
+            let height =
+              sum > 0
+                ? sum * (heightRect + padding) +
+                  paddingBetweenGroups +
+                  paddingBetweenGroups * d[1].length
+                : d[1].length * (heightRect + padding) + paddingBetweenGroups;
 
-          const res = positionPrevBlock;
-          positionPrevBlock = positionPrevBlock + height;
+            res = positionPrevBlock;
+            positionPrevBlock = positionPrevBlock + height;
+          }
           return "translate(0," + res + ")";
         });
         // подписи слева
-        d3.selectAll(".groupOfRect")
+        const labelForGroup = d3
+          .selectAll(".groupOfRect")
           .append("text")
           .text((d) => {
-            //console.log("d in text in groupOfRect", d);
             return d[0];
           })
           .attr("dy", (d) => (d[1].length * heightRect) / 2)
-          .attr("dx", -40)
+          .attr("dx", -paddingInfoLabel)
+          .attr("text-anchor", "end")
           .attr("class", "yAxisLabel");
+
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+          if (cols.length === 2) {
+            labelForGroup.attr("dy", heightStackedGroup / 2);
+          } else {
+            labelForGroup.attr(
+              "dy",
+              (d, i) => (heightStackedGroupLevelTwo * d[1].length) / 2
+            );
+          }
+        }
 
         if (cols.length > 2) {
           //////////////////////////////////////////////////////////////////////in level 2
           const groupOfRectNodes = groupOfRect.nodes();
           dataGrouped.forEach((element, i) => {
-            //console.log(element[1]);
             createGroupLevel2(element[1], groupOfRectNodes[i]);
           });
           //////////////////////////////////////////////////////////////////////rect in level 2
@@ -364,26 +454,51 @@ export default function BarD3(props) {
 
           let j = 0;
           dataGrouped.forEach((element) => {
-            //console.log("element in dataGrouped.forEach for level 2", element);
             element[1].forEach((element2) => {
-              createRect(
-                element2[1],
-                groupOfRectLevelTwoNodes.nodes()[j],
-                false,
-                false
-              );
-              j++;
+              if (visualGroupMode === "stacked") {
+                /////////////////////////////////staked
+                createStackedRect(
+                  element2[1],
+                  groupOfRectLevelTwoNodes.nodes()[j],
+                  false,
+                  false
+                );
+                j++;
+              } else {
+                createRect(
+                  element2[1],
+                  groupOfRectLevelTwoNodes.nodes()[j],
+                  false,
+                  true
+                );
+                j++;
+              }
             });
           });
         } else {
           //////////////////////////////////////////////////////////////////////rect in level 1
           const groupOfRectNodes = d3.selectAll(".groupOfRect");
           dataGrouped.forEach((element, i) => {
-            createRect(element[1], groupOfRectNodes.nodes()[i], false, true);
+            if (visualGroupMode === "stacked") {
+              /////////////////////////////////staked
+              createStackedRect(
+                element[1],
+                groupOfRectNodes.nodes()[i],
+                false,
+                true
+              );
+            } else {
+              createRect(element[1], groupOfRectNodes.nodes()[i], false, true);
+            }
           });
         }
       } else {
-        createRect(dataGrouped, d3.select(".rectCanvas").node());
+        // rect in level 0
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+        } else {
+          createRect(dataGrouped, d3.select(".rectCanvas").node());
+        }
       }
       ////////////////////////////////////////////////////////////////////////////////////создание подгрупп второго уровня вложенности
       function createGroupLevel2(data, node) {
@@ -391,34 +506,34 @@ export default function BarD3(props) {
         //console.log("inpute data in createGroupLevel2", data);
         //console.log("inpute node in createGroupLevel2", node);
         let positionPrevBlockIncreateGroupLevel2 = 0;
-        d3.select(node)
+        const groupOfRectLevelTwo = d3
+          .select(node)
           .selectAll(".groupOfRectLevelTwo")
           .data(data)
           .enter()
           .append("g")
-          .attr("class", "groupOfRectLevelTwo")
-          .attr("height", (d) => {
-            //console.log("d in level 2 in height", d[1]);
-            return d[1].length * heightRect;
-            //return 20;
-          })
-          .attr("transform", (d, i) => {
-            /* console.log(
-            "positionPrevBlock in transform in level 2",
-            positionPrevBlock
-          ); */
+          .attr("class", "groupOfRectLevelTwo");
+
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+          groupOfRectLevelTwo.attr("transform", (d, i) => {
+            const res2 = positionPrevBlockIncreateGroupLevel2;
+            positionPrevBlockIncreateGroupLevel2 += heightStackedGroupLevelTwo;
+            return "translate(0," + res2 + ")";
+          });
+        } else {
+          groupOfRectLevelTwo.attr("transform", (d, i) => {
             const res = positionPrevBlockIncreateGroupLevel2;
             positionPrevBlockIncreateGroupLevel2 =
               positionPrevBlockIncreateGroupLevel2 +
               d[1].length * heightRect +
               paddingBetweenGroups;
-            //console.log("res in transform", res);
             return "translate(0," + res + ")";
-            //return "translate(0," + 50 * i + ")";
           });
+        }
       }
       ////////////////////////////////////////////////////////////////////////////////////функция создания прямоугольников
-
+      //функция создания прямоугольников
       function createRect(
         data,
         node,
@@ -438,7 +553,6 @@ export default function BarD3(props) {
 
         rectAndLabel
           .append("rect")
-          //.attr("fill", mainColor)
           .attr("fill", (d) => {
             return colorScale(d[0]) + "";
           })
@@ -447,11 +561,9 @@ export default function BarD3(props) {
           .attr("height", heightRect)
           .attr("y", (d, i) => {
             return heightRect * i;
-            //console.log("d in create rect level 0", d);
           })
           .attr("class", "rectItem");
 
-        console.log("paddingInfoLabel", paddingInfoLabel);
         if (infoLabelIsVisible) {
           rectAndLabel // infoLabel
             .append("text")
@@ -484,6 +596,77 @@ export default function BarD3(props) {
             .attr("x", (d) => culcLabelPosition(d[1][0][metrica]))
             .attr("text-anchor", "start")
             .attr("dy", (heightRect * 2) / 3)
+            .attr("class", "valueLabel");
+        }
+      }
+      //////////////////////////////////////////////////////////////////////////создание rect для stacked
+      //создание rect для stacked
+      function createStackedRect(
+        data,
+        node,
+        infoLabelIsVisible = true,
+        valueLabelIsVisible = true
+      ) {
+        //console.log("data inpute in createRect", data);
+        let positionInStack = 0;
+        const dataModification = data.map((item) => {
+          const res = [item[0], item[1][0][metrica], positionInStack];
+          positionInStack += widthStackedScale(item[1][0][metrica]);
+          return res;
+        });
+        //console.log("dataModification", dataModification);
+        //console.log("node inpute in createRect", node);
+        //console.log("index inpute in createRect", index);
+        const canvasInFunction = d3.select(node);
+        const rectAndLabel = canvasInFunction //rects
+          .selectAll("rectAndLabel")
+          .data(dataModification)
+          .enter()
+          .append("g")
+          .attr("class", "rectAndLabel");
+
+        const rectInFunc = rectAndLabel
+          .append("rect")
+          //.attr("fill", mainColor)
+          .attr("fill", (d) => {
+            return colorScale(d[0]) + "";
+          })
+          .attr("opacity", "0.6")
+          .attr("width", (d) => widthStackedScale(d[1]))
+          //.attr("y", 0)
+          .attr("x", (d) => d[2])
+          .attr("class", "rectItem");
+
+        if (cols.length === 3) {
+          //rectInFunc.attr("height", heightStackedGroupLevelTwo);
+          rectInFunc.attr("height", heightStackedGroupLevelTwo);
+        } else {
+          rectInFunc.attr("height", heightStackedGroup);
+        }
+
+        if (infoLabelIsVisible) {
+          rectAndLabel // infoLabel
+            .append("text")
+            .text((d) => {
+              return d[0];
+            })
+            .attr("font-size", yAxisFontSize)
+            .attr("dx", (d) => d[2] + culcLabelPosition(d[1], "stacked"))
+            //.attr("text-anchor", "middle")
+            .attr("dy", heightStackedGroup / 2)
+            .attr("class", "infoLabel");
+        }
+        if (valueLabelIsVisible) {
+          rectAndLabel // valueLabel
+            .append("text")
+            .text((d) => {
+              return d[1];
+            })
+            .attr("font-size", labelFontSize)
+            .attr("fill", labelColor)
+            .attr("x", (d) => d[2] + culcLabelPosition(d[1], "stacked"))
+            .attr("text-anchor", "start")
+            .attr("dy", heightStackedGroup / 2)
             .attr("class", "valueLabel");
         }
       }
@@ -526,88 +709,59 @@ export default function BarD3(props) {
           .duration(300)
           .attr("opacity", "0.6");
       });
-      rects
-        .selectAll(".rectItem")
-        .transition()
-        .attr("width", (d) => {
-          return Number(widthScale(d[1][0][metrica]));
-        })
-        .duration(1000);
-      rects.selectAll(".rectItem").on("mouseenter", function () {
+      /////////////////////////////////staked
+      if (visualGroupMode === "stacked") {
+      } else {
+        rects
+          .selectAll(".rectItem")
+          .transition()
+          .attr("width", (d) => {
+            return Number(widthScale(d[1][0][metrica]));
+          })
+          .duration(1000);
+      }
+      /* rects.selectAll(".rectItem").on("mouseenter", function () {
         d3.select(this).transition().duration(300).attr("opacity", "1");
         //const parentGroup = d3.select(this).node().parentNode;
       });
       rects.selectAll(".rectItem").on("mouseleave", function () {
         d3.select(this).transition().duration(300).attr("opacity", "0.6");
         // const parentGroup = d3.select(this).node().parentNode;
-      });
+      }); */
     } else {
       ///////////********///////////////////////////////////////////////////////////////////////////////
       //////////////////////вертикальный режим///////////////////////////////////////////////////////////////////вертикальный
       ///////////////////////////////////////////////////////////////////////////////////////////////
-      console.log("verticalMode");
-      const yAxis = d3.axisLeft(heightScale).ticks(10); // ось Y
-      const yAxisTicks = d3 //ось Y для сетки
-        .axisLeft(heightScale)
-        .tickSize(-widthChart)
-        .ticks(10)
-        .tickArguments([]);
-      ///////////////////////////////////////рисуем
-      const canvas = element
-        .append("svg")
-        .attr("width", width)
-        .attr("height", height)
-        .attr("class", "MyChart")
-        .attr("style", "padding-top: " + paddingTop + "px");
-      ////////////////////////////////////////////////////////////////////легенда
-      const legendXChange =
-        legendX === undefined ? widthChart - paddingRight : legendX;
-
-      const legendTable = canvas
-        .append("g")
-        .attr("class", "legendTable")
-        .attr("transform", "translate(" + legendXChange + "," + legendY + ")");
-
-      const legend = legendTable
-        .selectAll(".legend")
-        .data(arrayOfDifferentType)
-        .enter()
-        .append("g")
-        .attr("class", "legend")
-        .attr("transform", function (d, i) {
-          return "translate(0," + i * 15 + ")";
-        });
-
-      legend
-        .append("rect")
-        .attr("x", 1)
-        .attr("y", 1)
-        .attr("height", 10)
-        .attr("width", 10)
-        .attr("fill", (d) => colorScale(d))
-        .attr("class", "legend__rect-item");
-
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 10)
-        .attr("height", 10)
-        .attr("width", 10)
-        .text((d) => d)
-        .attr("class", "legend__text-item");
+      let yAxis;
+      let yAxisTicks;
+      if (visualGroupMode === "stacked") {
+        yAxis = d3.axisLeft(heightStackedScaleForAxis).ticks(10); // ось Y
+        yAxisTicks = d3 //ось Y для сетки
+          .axisLeft(heightStackedScaleForAxis)
+          .tickSize(-widthChart)
+          .ticks(10)
+          .tickArguments([]);
+      } else {
+        yAxis = d3.axisLeft(heightScale).ticks(10); // ось Y
+        yAxisTicks = d3 //ось Y для сетки
+          .axisLeft(heightScale)
+          .tickSize(-widthChart)
+          .ticks(10)
+          .tickArguments([]);
+      }
       ////////////////////////////////////////////////
       const yAxisTicksGroup = canvas // группа для сетки
         .append("g")
-        .attr("class", "Yaxis")
+        .attr("class", "YaxisTicks")
         .attr(
           "transform",
           "translate(" + paddingLeft + ", " + paddingTop + ")"
         );
       yAxisTicksGroup.call(yAxisTicks).style("opacity", "0.1");
 
-      const yAxisGroup = canvas //группа  для оси х
+      const yAxisGroup = canvas //группа  для оси y
         .append("g")
-        .attr("class", "yaxis")
+        .attr("class", "Yaxis")
         .attr(
           "transform",
           "translate(" + paddingLeft + ", " + paddingTop + ")"
@@ -618,11 +772,10 @@ export default function BarD3(props) {
       const rects = canvas
         .append("g")
         .attr("class", "rectCanvas")
-        .attr("height", heightChart)
-        .attr("width", widthChart)
-        .attr("transform", "translate(" + paddingLeft + ", " + paddingTop + ")")
-        //.attr("style", "padding-right: " + paddingRight + "px");
-        .attr("style", "padding-right: 150px");
+        .attr(
+          "transform",
+          "translate(" + paddingLeft + ", " + paddingTop + ")"
+        );
 
       rects // ось x
         .append("line")
@@ -643,40 +796,62 @@ export default function BarD3(props) {
           .attr("class", "groupOfRect");
 
         groupOfRect.attr("transform", (d, i) => {
-          //console.log("positionPrevBlock in groupOfRect", d[1]);
-          let sum = 0;
-          if (cols.length === 3) {
-            d[1].forEach((el) => {
-              sum += el[1].length;
-            });
-          }
-          let height =
-            sum > 0
-              ? sum * (heightRect + padding) +
-                paddingBetweenGroups +
-                paddingBetweenGroups * d[1].length
-              : d[1].length * (heightRect + padding) + paddingBetweenGroups;
+          let res;
+          if (visualGroupMode === "stacked") {
+            /////////////////////////////////staked
+            if (cols.length === 3) {
+              res = positionPrevBlock;
+              positionPrevBlock =
+                positionPrevBlock + widthStackedGroupLevelTwo * d[1].length;
+            } else {
+              res = widthStackedGroup * i;
+            }
+          } else {
+            let sum = 0;
+            if (cols.length === 3) {
+              d[1].forEach((el) => {
+                sum += el[1].length;
+              });
+            }
+            let width =
+              sum > 0
+                ? sum * (widthRect + padding) +
+                  paddingBetweenGroups +
+                  paddingBetweenGroups * d[1].length
+                : d[1].length * (widthRect + padding) + paddingBetweenGroups;
 
-          const res = positionPrevBlock;
-          positionPrevBlock = positionPrevBlock + height;
+            res = positionPrevBlock;
+            positionPrevBlock = positionPrevBlock + width;
+          }
           return "translate(" + res + ",0)";
         });
-        // подписи слева
-        d3.selectAll(".groupOfRect")
+        // подписи групп снизу
+        const labelForGroup = d3
+          .selectAll(".groupOfRect")
           .append("text")
           .text((d) => {
-            //console.log("d in text in groupOfRect", d);
             return d[0];
           })
-          .attr("dy", (d) => (d[1].length * heightRect) / 2)
-          .attr("dx", -40)
-          .attr("class", "yAxisLabel");
+          .attr("dy", heightChart + paddingInfoLabel)
+          .attr("dominant-baseline", "text-before-edge")
+          .attr("class", "yAxisLabel")
+          .attr("font-size", xAxisFontSize);
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+          if (cols.length === 2) {
+            labelForGroup.attr("dx", widthStackedGroup / 2);
+          } else {
+            labelForGroup.attr(
+              "dx",
+              (d, i) => (widthStackedGroupLevelTwo * d[1].length) / 2
+            );
+          }
+        }
 
         if (cols.length > 2) {
           //////////////////////////////////////////////////////////////////////in level 2
           const groupOfRectNodes = groupOfRect.nodes();
           dataGrouped.forEach((element, i) => {
-            //console.log(element[1]);
             createGroupLevel2(element[1], groupOfRectNodes[i]);
           });
           //////////////////////////////////////////////////////////////////////rect in level 2
@@ -684,61 +859,87 @@ export default function BarD3(props) {
 
           let j = 0;
           dataGrouped.forEach((element) => {
-            //console.log("element in dataGrouped.forEach for level 2", element);
             element[1].forEach((element2) => {
-              createRect(
-                element2[1],
-                groupOfRectLevelTwoNodes.nodes()[j],
-                false,
-                false
-              );
-              j++;
+              if (visualGroupMode === "stacked") {
+                /////////////////////////////////staked
+                createStackedRect(
+                  element2[1],
+                  groupOfRectLevelTwoNodes.nodes()[j],
+                  false,
+                  false
+                );
+                j++;
+              } else {
+                createRect(
+                  element2[1],
+                  groupOfRectLevelTwoNodes.nodes()[j],
+                  false,
+                  true
+                );
+                j++;
+              }
             });
           });
         } else {
           //////////////////////////////////////////////////////////////////////rect in level 1
           const groupOfRectNodes = d3.selectAll(".groupOfRect");
           dataGrouped.forEach((element, i) => {
-            createRect(element[1], groupOfRectNodes.nodes()[i], false, true);
+            if (visualGroupMode === "stacked") {
+              /////////////////////////////////staked
+              createStackedRect(
+                element[1],
+                groupOfRectNodes.nodes()[i],
+                false,
+                true
+              );
+            } else {
+              createRect(element[1], groupOfRectNodes.nodes()[i], false, true);
+            }
           });
         }
       } else {
-        createRect(dataGrouped, d3.select(".rectCanvas").node());
+        // rect in level 0
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+        } else {
+          createRect(dataGrouped, d3.select(".rectCanvas").node());
+        }
       }
       ////////////////////////////////////////////////////////////////////////////////////создание подгрупп второго уровня вложенности
+      //создание подгрупп второго уровня вложенности
       function createGroupLevel2(data, node) {
         //
         //console.log("inpute data in createGroupLevel2", data);
         //console.log("inpute node in createGroupLevel2", node);
         let positionPrevBlockIncreateGroupLevel2 = 0;
-        d3.select(node)
+        const groupOfRectLevelTwo = d3
+          .select(node)
           .selectAll(".groupOfRectLevelTwo")
           .data(data)
           .enter()
           .append("g")
-          .attr("class", "groupOfRectLevelTwo")
-          .attr("height", (d) => {
-            //console.log("d in level 2 in height", d[1]);
-            return d[1].length * heightRect;
-            //return 20;
-          })
-          .attr("transform", (d, i) => {
-            /* console.log(
-            "positionPrevBlock in transform in level 2",
-            positionPrevBlock
-          ); */
+          .attr("class", "groupOfRectLevelTwo");
+
+        if (visualGroupMode === "stacked") {
+          /////////////////////////////////staked
+          groupOfRectLevelTwo.attr("transform", (d, i) => {
+            const res2 = positionPrevBlockIncreateGroupLevel2;
+            positionPrevBlockIncreateGroupLevel2 += widthStackedGroupLevelTwo;
+            return "translate(" + res2 + ",0)";
+          });
+        } else {
+          groupOfRectLevelTwo.attr("transform", (d, i) => {
             const res = positionPrevBlockIncreateGroupLevel2;
             positionPrevBlockIncreateGroupLevel2 =
               positionPrevBlockIncreateGroupLevel2 +
-              d[1].length * heightRect +
+              d[1].length * widthRect +
               paddingBetweenGroups;
-            //console.log("res in transform", res);
-            return "translate(0," + res + ")";
-            //return "translate(0," + 50 * i + ")";
+            return "translate(" + res + ",0)";
           });
+        }
       }
       ////////////////////////////////////////////////////////////////////////////////////функция создания прямоугольников
-
+      //функция создания прямоугольников
       function createRect(
         data,
         node,
@@ -758,7 +959,6 @@ export default function BarD3(props) {
 
         rectAndLabel
           .append("rect")
-          //.attr("fill", mainColor)
           .attr("fill", (d) => {
             return colorScale(d[0]) + "";
           })
@@ -767,7 +967,6 @@ export default function BarD3(props) {
           .attr("height", 0)
           .attr("x", (d, i) => {
             return widthRect * i;
-            //console.log("d in create rect level 0", d);
           })
           .attr("y", (d) => heightScale(d[1][0][metrica]))
           .attr("class", "rectItem");
@@ -808,62 +1007,174 @@ export default function BarD3(props) {
             //.attr("dx", (widthRect * 2) / 3)
             .attr("dx", widthRect / 2)
             .attr("class", "valueLabel");
-
-          ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-          rects //пороговое значение
-            .append("line")
-            .attr("x1", 0)
-            .attr("y1", heightScale(xLimitLine))
-            .attr("x2", widthChart)
-            .attr("y2", heightScale(xLimitLine))
-            .attr("stroke-width", 4)
-            .attr("stroke", limitColor)
-            .attr("opacity", "0.15")
-            .attr("class", "lineLimit");
-          ////////////////////////////////////////////////////////////////////////create label
-          if (labelPosition === "none") {
-            d3.selectAll(".valueLabel").attr("opacity", "0");
-          } else {
-            d3.selectAll(".valueLabel")
-              .transition()
-              .attr("opacity", "1")
-              .duration(1200);
-            ////////////////////////////////////////////////// animation
-            d3.selectAll(".yAxisLabel").on("mouseenter", (el) => {
-              d3.select(el.path[1])
-                .selectAll(".rectItem")
-                .transition()
-                .duration(300)
-                //.attr("fill", "red")
-                .attr("opacity", "1");
-              //console.log(el.path[1]);
-            });
-            d3.selectAll(".yAxisLabel").on("mouseleave", (el) => {
-              d3.select(el.path[1])
-                .selectAll(".rectItem")
-                .transition()
-                .duration(300)
-                .attr("opacity", "0.6");
-            });
-            rects
-              .selectAll(".rectItem")
-              .transition()
-              .attr("height", (d) => {
-                return Number(heightChart - heightScale(d[1][0][metrica]));
-              })
-              .duration(1000);
-            rects.selectAll(".rectItem").on("mouseenter", function () {
-              d3.select(this).transition().duration(300).attr("opacity", "1");
-              //const parentGroup = d3.select(this).node().parentNode;
-            });
-            rects.selectAll(".rectItem").on("mouseleave", function () {
-              d3.select(this).transition().duration(300).attr("opacity", "0.6");
-              // const parentGroup = d3.select(this).node().parentNode;
-            });
-          }
         }
       }
+      //////////////////////////////////////////////////////////////////////////создание rect для stacked
+      //создание rect для stacked
+      function createStackedRect(
+        data,
+        node,
+        infoLabelIsVisible = true,
+        valueLabelIsVisible = true
+      ) {
+        //console.log("data inpute in createRect", data);
+        let positionInStack = 0;
+        const dataModification = data.map((item) => {
+          const res = [item[0], item[1][0][metrica], positionInStack];
+          positionInStack += heightStackedScale(item[1][0][metrica]);
+          return res;
+        });
+        console.log("dataModification", dataModification);
+        //console.log("node inpute in createRect", node);
+        //console.log("index inpute in createRect", index);
+        const canvasInFunction = d3.select(node);
+        const rectAndLabel = canvasInFunction //rects
+          .selectAll("rectAndLabel")
+          .data(dataModification)
+          .enter()
+          .append("g")
+          .attr("class", "rectAndLabel");
+
+        const rectInFunc = rectAndLabel
+          .append("rect")
+          //.attr("fill", mainColor)
+          .attr("fill", (d) => {
+            return colorScale(d[0]) + "";
+          })
+          .attr("opacity", "0.6")
+          .attr("height", (d) => heightStackedScale(d[1]))
+          //.attr("y", 0)
+          .attr("y", (d) => heightChart - heightStackedScale(d[1]) - d[2])
+          .attr("class", "rectItem");
+
+        if (cols.length === 3) {
+          //rectInFunc.attr("height", heightStackedGroupLevelTwo);
+          rectInFunc.attr("width", widthStackedGroupLevelTwo);
+        } else {
+          rectInFunc.attr("width", widthStackedGroup);
+        }
+
+        if (infoLabelIsVisible) {
+          rectAndLabel // infoLabel
+            .append("text")
+            .text((d) => {
+              return d[0];
+            })
+            .attr("font-size", yAxisFontSize)
+            .attr("dy", (d) => {
+              //console.log
+              return (
+                heightChart -
+                heightStackedScale(d[1]) -
+                d[2] +
+                culcLabelPosition(d[1], "stacked")
+              );
+            })
+            //.attr("text-anchor", "middle")
+            .attr("dx", widthStackedGroup / 2)
+            .attr("class", "infoLabel");
+        }
+        if (valueLabelIsVisible) {
+          rectAndLabel // valueLabel
+            .append("text")
+            .text((d) => {
+              return d[1];
+            })
+            .attr("font-size", labelFontSize)
+            .attr("fill", labelColor)
+            .attr(
+              "y",
+              (d) =>
+                heightChart -
+                d[2] -
+                culcLabelPositionForVertical(d[1], "stacked")
+            )
+            //.attr("text-anchor", "start")
+            .attr("dominant-baseline", "auto")
+            .attr("dx", widthStackedGroup / 2)
+            .attr("class", "valueLabel");
+        }
+      }
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      rects //пороговое значение
+        .append("line")
+        .attr("x1", 0)
+        .attr("y1", heightScale(xLimitLine))
+        .attr("x2", widthChart)
+        .attr("y2", heightScale(xLimitLine))
+        .attr("stroke-width", 4)
+        .attr("stroke", limitColor)
+        .attr("opacity", "0.15")
+        .attr("class", "lineLimit");
+      ////////////////////////////////////////////////////////////////////////create label
+      if (labelPosition === "none") {
+        d3.selectAll(".valueLabel").attr("opacity", "0");
+      } else {
+        d3.selectAll(".valueLabel")
+          .transition()
+          .attr("opacity", "1")
+          .duration(1200);
+      }
+      ////////////////////////////////////////////////// animation
+      /////////////////////////////////staked
+      if (visualGroupMode === "stacked") {
+      } else {
+        d3.selectAll(".rectItem")
+          .transition()
+          .attr("height", (d) => {
+            return Number(heightChart - heightScale(d[1][0][metrica]));
+          })
+          .duration(1000);
+      }
     }
+    ////////////////////////////////////////////////// animation
+    d3.selectAll(".yAxisLabel").on("mouseenter", (el) => {
+      d3.select(el.path[1])
+        .selectAll(".rectItem")
+        .transition()
+        .duration(300)
+        //.attr("fill", "red")
+        .attr("opacity", "1");
+      //console.log(el.path[1]);
+    });
+    d3.selectAll(".yAxisLabel").on("mouseleave", (el) => {
+      d3.select(el.path[1])
+        .selectAll(".rectItem")
+        .transition()
+        .duration(300)
+        .attr("opacity", "0.6");
+    });
+
+    canvas
+      .append("text")
+      .attr("class", "tooltip")
+      .attr("style", "position: absolute; opacity: 0;");
+    d3.selectAll(".rectItem").on("mouseenter", function (el) {
+      d3.select(this).transition().duration(300).attr("opacity", "1");
+    });
+    d3.selectAll(".rectItem").on("mouseleave", function () {
+      d3.select(this).transition().duration(300).attr("opacity", "0.6");
+      // const parentGroup = d3.select(this).node().parentNode;
+    });
+    d3.selectAll(".rectItem")
+      .on("mouseover", (d) => {
+        d3.select(".tooltip").style("opacity", 1);
+      })
+      .on("mouseout", function (d) {
+        d3.select(".tooltip").style("opacity", 0);
+      })
+      .on("mousemove", function (d) {
+        let res = d.path[0].__data__[0];
+        if (d.path[2]?.__data__) {
+          res = res + "   " + d.path[2].__data__[0];
+        }
+        if (d.path[3]?.__data__) {
+          res = res + "   " + d.path[3].__data__[0];
+        }
+        d3.select(".tooltip")
+          .attr("transform", "translate(" + d.pageX + "," + d.pageY + ")")
+          .text(res);
+      });
   }
 
   useEffect(() => {
